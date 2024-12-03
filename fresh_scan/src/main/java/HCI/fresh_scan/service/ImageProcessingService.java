@@ -16,7 +16,7 @@ public class ImageProcessingService {
     // Python 스크립트를 실행하고 결과를 반환하는 메서드
     public Map<String, Object> processImage(File imageFile) throws Exception {
         // Python 스크립트 경로 설정
-        String scriptPath = "c:/HCI_freshScan/integrated_model.py"; // Python 스크립트 파일 위치
+        String scriptPath = "c:/fresh-Scan/analysis/integrated_model.py"; // Python 스크립트 파일 위치
         List<String> command = Arrays.asList(
                 "python",          // Python 실행 명령
                 scriptPath,        // Python 스크립트 경로
