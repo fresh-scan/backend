@@ -8,10 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.util.*;
 
 @RestController
 @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -32,48 +30,65 @@ public class ImageProcessingController {
         List<String> names = new ArrayList<>();
         List<String> expiryDates = new ArrayList<>();
 
-        Map<String, String> nameMapping = new HashMap<>();
-        nameMapping.put("tomato", "토마토");
-        nameMapping.put("tofu", "두부");
-        nameMapping.put("sauce", "토마토 케첩");
-        nameMapping.put("pimang", "피망");
-        nameMapping.put("carrot", "당근");
-        nameMapping.put("gaji", "가지");
-        nameMapping.put("cabbage", "양배추");
-        nameMapping.put("beef", "소고기");
-        nameMapping.put("milk", "우유");
-        nameMapping.put("fish", "생선");
+        // 이름 매핑
+        Map<String, String> nameMapping = Map.of(
+                "tomato", "토마토",
+                "tofu", "두부",
+                "sauce", "토마토 케첩",
+                "pimang", "피망",
+                "carrot", "당근",
+                "gaji", "가지",
+                "cabbage", "양배추",
+                "beef", "소고기",
+                "milk", "우유",
+                "fish", "생선"
+        );
 
+        // 라벨 없는 재료의 유통기한 설정 (일 단위)
+        Map<String, Integer> labelFreeExpirationDays = Map.of(
+                "tomato", 14,  // 2주
+                "pimang", 14,  // 2주
+                "carrot", 21,  // 3주
+                "gaji", 10,    // 10일
+                "cabbage", 30, // 1달
+                "beef", 7,     // 1주
+                "fish", 5      // 5일
+        );
+
+        List<File> tempFiles = new ArrayList<>();
         for (MultipartFile file : files) {
             File tempFile = File.createTempFile("upload-", file.getOriginalFilename());
             file.transferTo(tempFile);
+            tempFiles.add(tempFile);
+        }
 
-            try {
-                // Python 스크립트 실행 및 결과 받기
-                Map<String, Object> result = imageProcessingService.processImage(tempFile);
+        try {
+            List<Map<String, Object>> results = imageProcessingService.processImages(tempFiles);
+            for (int i = 0; i < results.size(); i++) {
+                Map<String, Object> result = results.get(i);
+                RecognitionResult savedResult = recognitionResultService.saveResult(tempFiles.get(i).getAbsolutePath(), result);
 
-                // 저장된 RecognitionResult 객체 반환
-                RecognitionResult savedResult = recognitionResultService.saveResult(tempFile.getAbsolutePath(), result);
-
-                // 데이터 분리 및 리스트에 추가
                 ids.add(savedResult.getId());
                 registeredDates.add(savedResult.getRegisteredDate());
 
-                // detected_labels와 expiration_dates 처리
-                List<String> detectedLabels = (List<String>) savedResult.getDetectedData().get("detected_labels");
-                if (!detectedLabels.isEmpty()) {
-                    String originalName = detectedLabels.get(0);
-                    // 매핑 테이블에서 한글 이름으로 변환
-                    String mappedName = nameMapping.getOrDefault(originalName, originalName);
-                    names.add(mappedName);
+                List<String> detectedLabels = (List<String>) result.get("detected_labels");
+                String ingredient = detectedLabels.isEmpty() ? null : detectedLabels.get(0);
+                String mappedName = ingredient == null ? null : nameMapping.getOrDefault(ingredient, ingredient);
+
+                // 유통기한 계산
+                if (ingredient != null && labelFreeExpirationDays.containsKey(ingredient)) {
+                    LocalDate expiryDate = LocalDate.now().plusDays(labelFreeExpirationDays.get(ingredient));
+                    expiryDates.add(expiryDate.toString());
                 } else {
-                    names.add(null);
+                    List<String> expirationDates = (List<String>) result.get("expiration_dates");
+                    expiryDates.add(expirationDates.isEmpty() ? null : expirationDates.get(0));
                 }
 
-                List<String> expirationDates = (List<String>) savedResult.getDetectedData().get("expiration_dates");
-                expiryDates.add(expirationDates.isEmpty() ? null : expirationDates.get(0));
-            } finally {
-                tempFile.delete(); // 임시 파일 삭제
+                names.add(mappedName);
+            }
+        } finally {
+            for (File tempFile : tempFiles) {
+                tempFile.delete();
             }
         }
 
@@ -86,5 +101,4 @@ public class ImageProcessingController {
 
         return response;
     }
-
 }

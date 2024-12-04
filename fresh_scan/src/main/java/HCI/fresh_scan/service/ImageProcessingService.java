@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -14,14 +15,16 @@ import java.util.Map;
 public class ImageProcessingService {
 
     // Python 스크립트를 실행하고 결과를 반환하는 메서드
-    public Map<String, Object> processImage(File imageFile) throws Exception {
+    public List<Map<String, Object>> processImages(List<File> imageFiles) throws Exception {
         // Python 스크립트 경로 설정
         String scriptPath = "c:/fresh-Scan/analysis/integrated_model.py"; // Python 스크립트 파일 위치
-        List<String> command = Arrays.asList(
-                "python",          // Python 실행 명령
-                scriptPath,        // Python 스크립트 경로
-                imageFile.getAbsolutePath() // 이미지 파일 경로
-        );
+        List<String> command = new ArrayList<>();
+        command.add("python");
+        command.add(scriptPath);
+
+        for (File imageFile : imageFiles) {
+            command.add(imageFile.getAbsolutePath());
+        }
 
 
         //황지연 가상환경 전용 경로!!! 지우지 말아주세요!!
@@ -65,8 +68,7 @@ public class ImageProcessingService {
             throw new RuntimeException("Python 스크립트 실행 실패. 종료 코드: " + exitCode + ", 에러: " + errorOutput.toString());
         }
 
-        // Python 출력(JSON 문자열)을 Java Map으로 변환
         ObjectMapper objectMapper = new ObjectMapper();
-        return objectMapper.readValue(output.toString(), Map.class);
+        return objectMapper.readValue(output.toString(), List.class);
     }
 }
